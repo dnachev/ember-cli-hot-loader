@@ -25,6 +25,8 @@ module.exports = {
     var addonConfig = config[this.name] || { supportedTypes: ['components'] };
     this.supportedTypes = addonConfig['supportedTypes'] || ['components'];
 
+    debugger;
+
     var npmCompilerPath = path.join('ember-source', 'dist', 'ember-template-compiler.js');
     var npmPath = path.relative(app.project.root, require.resolve(npmCompilerPath));
 

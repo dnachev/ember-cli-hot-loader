@@ -7,6 +7,7 @@ import config from 'ember-get-config';
 
 import clearCache from 'ember-cli-hot-loader/utils/clear-container-cache';
 import clearRequirejs from 'ember-cli-hot-loader/utils/clear-requirejs';
+import fullNameWithoutType from 'ember-cli-hot-loader/utils/names';
 
 function regexEscape(s) {
   return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); // eslint-disable-line
@@ -47,6 +48,7 @@ export function matchingComponent (componentName, modulePath) {
   }
   var standardModulePath = modulePath.split('\\').join('/');
   var javascriptPath = standardModulePath.replace(/\.ts$/, '.js');
+  componentName = componentName.replace(/^[^@]*@/, '');
   return matchesClassicConvention(componentName, javascriptPath) ||
     matchesPodConvention(componentName, javascriptPath);
 }
@@ -94,27 +96,31 @@ const HotReplacementComponent = Component.extend(HotComponentMixin, {
 
   __willLiveReload (event) {
     const baseComponentName = this.get('baseComponentName');
+    const baseParsedName = this.get('baseParsedName');
     if (matchingComponent(baseComponentName, event.modulePath)) {
       event.cancel = true;
-      clearRequirejs(this, baseComponentName);
+      clearRequirejs(this, baseParsedName);
     }
   },
   __rerenderOnTemplateUpdate (modulePath) {
       const baseComponentName = this.get('baseComponentName');
       const wrappedComponentName = this.get('wrappedComponentName');
+      const baseParsedName = this.get('baseParsedName');
       if(matchingComponent(baseComponentName, modulePath)) {
           this._super(...arguments);
           clearCache(this, baseComponentName);
           clearCache(this, wrappedComponentName);
           this.setProperties({
             wrappedComponentName: undefined,
-            baseComponentName: undefined
+            baseComponentName: undefined,
+            baseParsedName: undefined,
           });
           this.rerender();
           later(() => {
             this.setProperties({
               wrappedComponentName: wrappedComponentName,
-              baseComponentName: baseComponentName
+              baseComponentName: baseComponentName,
+              baseParsedName: baseParsedName
             });
           });
       }
@@ -124,9 +130,11 @@ const HotReplacementComponent = Component.extend(HotComponentMixin, {
 HotReplacementComponent.reopenClass({
   createClass(OriginalComponentClass, parsedName) {
     const NewComponentClass = HotReplacementComponent.extend({
-      baseComponentName: parsedName.fullNameWithoutType,
-      wrappedComponentName: parsedName.fullNameWithoutType + '-original'
+      baseComponentName: fullNameWithoutType(parsedName),
+      baseParsedName: parsedName,
+      wrappedComponentName: fullNameWithoutType(parsedName) + '-original'
     });
+
     NewComponentClass.reopenClass({
       positionalParams: OriginalComponentClass.positionalParams ? OriginalComponentClass.positionalParams.slice() : []
     });

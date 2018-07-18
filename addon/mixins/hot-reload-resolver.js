@@ -4,6 +4,7 @@ import HotReplacementComponent from 'ember-cli-hot-loader/components/hot-replace
 import { get, computed } from '@ember/object';
 import config from 'ember-get-config';
 import { captureTemplateOptions } from 'ember-cli-hot-loader/utils/clear-container-cache';
+import fullNameWithoutType from 'ember-cli-hot-loader/utils/names';
 
 function removeOriginalFromParsedName (parsedName) {
   parsedName.fullName = parsedName.fullName.replace(/-original$/, '');
@@ -55,7 +56,7 @@ export default Mixin.create({
     return HotReplacementComponent.createClass(resolved, parsedName);
   },
   _resolveOriginalTemplateForComponent (parsedName) {
-    const templateFullName = `template:components/${parsedName.fullNameWithoutType}-original`;
+    const templateFullName = `template:components/${fullNameWithoutType(parsedName)}-original`;
     const templateParsedName = this.parseName(templateFullName);
     return this.resolveTemplate(templateParsedName) || this.resolveOther(templateParsedName);
   },

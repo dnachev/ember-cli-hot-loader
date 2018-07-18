@@ -18,17 +18,14 @@ function requireUnsee(module) {
  * @param {Object} config The applicaiton config
  * @param {String} componentName The component name being reloaded
  */
-export function clearRequirejsCache(config, componentName) {
-  const modulePrefix = get(config, 'modulePrefix');
-  const podModulePrefix = get(config, 'podModulePrefix') || modulePrefix;
-
+export function clearRequirejsCache(config, parsedName) {
   // Invalidate regular module
-  requireUnsee(`${modulePrefix}/components/${componentName}`);
-  requireUnsee(`${modulePrefix}/templates/components/${componentName}`);
+  requireUnsee(`${parsedName.prefix}/components/${parsedName.fullNameWithoutType}`);
+  requireUnsee(`${parsedName.prefix}/templates/components/${parsedName.fullNameWithoutType}`);
 
   // Invalidate pod modules
-  requireUnsee(`${podModulePrefix}/components/${componentName}/component`);
-  requireUnsee(`${podModulePrefix}/components/${componentName}/template`);
+  requireUnsee(`${parsedName.prefix}/components/${parsedName.fullNameWithoutType}/component`);
+  requireUnsee(`${parsedName.prefix}/components/${parsedName.fullNameWithoutType}/template`);
 }
 
 /**
