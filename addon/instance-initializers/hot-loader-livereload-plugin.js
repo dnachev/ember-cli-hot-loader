@@ -1,35 +1,64 @@
-/* global require */
+import {all, Promise as rsvpPromise} from 'rsvp';
 
-function createPlugin (appName, hotReloadService, rootURL) {
+const DONT_RELOAD_PATTERNS = [/^(?!\/?assets\/).*/, /^\/?assets\/vendor-static\.js/];
 
-  function Plugin (window, host) {
+function shouldReloadScript(scriptEl) {
+  if (!scriptEl || scriptEl.getAttribute('src') == null) {
+    return false;
+  }
+  const src = scriptEl.getAttribute('src');
+  return !DONT_RELOAD_PATTERNS.some(pattern => pattern.test(src));
+}
+
+function loadScript(src) {
+  return new rsvpPromise((resolve, reject) => {
+    const scriptEl = document.createElement('script');
+    scriptEl.onload = function() {
+      resolve();
+    };
+    scriptEl.onerror = function(e) {
+      reject(e);
+    };
+    scriptEl.type = 'text/javascript';
+    scriptEl.src = src;
+    document.body.appendChild(scriptEl);
+  });
+}
+
+function createPlugin(hotReloadService) {
+  function Plugin(window, host) {
     this.window = window;
     this.host = host;
   }
   Plugin.identifier = 'ember-hot-reload';
   Plugin.version = '1.0'; // Just following the example, this might not be even used
   Plugin.prototype.reload = function(path) {
-    const cancelableEvent = { modulePath: path, cancel: false};
+    const cancelableEvent = {modulePath: path, cancel: false};
     hotReloadService.trigger('willLiveReload', cancelableEvent);
-    if (cancelableEvent.cancel) {   // Only hotreload if someone canceled the regular reload
+    if (cancelableEvent.cancel) {
+      // Only hotreload if someone canceled the regular reload
       // Reloading app.js will fire Application.create unless we set this.
       window.runningTests = true;
-      var tags = document.getElementsByTagName('script');
-      for (var i = tags.length; i >= 0; i--){
-        if (tags[i] && tags[i].getAttribute('src') != null && tags[i].getAttribute('src').indexOf(appName) !== -1) {
-          tags[i].parentNode.removeChild(tags[i]);
+
+      const scriptsToReload = [];
+      const scriptTags = document.getElementsByTagName('script');
+      for (let i = scriptTags.length - 1; i >= 0; i--) {
+        if (shouldReloadScript(scriptTags[i])) {
+          scriptsToReload.push(scriptTags[i]);
+          scriptTags[i].parentNode.removeChild(scriptTags[i]);
         }
       }
-      var script = document.createElement('script');
-      script.onload = function() {
+
+      const pendingScripts = scriptsToReload.map(oldScriptEl =>
+        loadScript(oldScriptEl.getAttribute('src')),
+      );
+
+      all(pendingScripts).then(() => {
         setTimeout(function() {
           window.runningTests = false;
           hotReloadService.trigger('willHotReload', path);
         }, 10);
-      };
-      script.type = 'text/javascript';
-      script.src = `${rootURL}assets/${appName}.js`;
-      document.body.appendChild(script);
+      });
 
       return true;
     }
@@ -37,51 +66,31 @@ function createPlugin (appName, hotReloadService, rootURL) {
   };
   Plugin.prototype.analyze = function() {
     return {
-      disable: false
+      disable: false,
     };
   };
 
   return Plugin;
 }
 
-function lookup (appInstance, fullName) {
+function lookup(appInstance, fullName) {
   if (appInstance.lookup) {
     return appInstance.lookup(fullName);
   }
   return appInstance.application.__container__.lookup(fullName);
 }
 
-function getAppName (appInstance) {
-  if (appInstance.base) {
-    return appInstance.base.name;
-  }
-  // TODO: would this work in 2.4+?
-  return appInstance.application.name;
-}
-
-function getRootUrl (appName) {
-  let modulePath = `${appName}/config/environment`;
-  if (require._eak_seen[modulePath]) {
-    return require(modulePath).default.rootURL || '/';
-  }
-  return '/';
-}
-
 export function initialize(appInstance) {
   if (!window.LiveReload) {
     return;
   }
-  let appName = getAppName(appInstance);
-  // if (appName === 'ember-cli-hot-loader') {
-    // TODO: find a better way to support other addons using the dummy app
-    appName = 'vendor';
-  // }
-  let rootURL = getRootUrl(appName);
-  const Plugin = createPlugin(appName, lookup(appInstance, 'service:hot-reload'), rootURL);
+  const Plugin = createPlugin(
+    lookup(appInstance, 'service:hot-reload'),
+  );
   window.LiveReload.addPlugin(Plugin);
 }
 
 export default {
   name: 'hot-loader-livereload-plugin',
-  initialize
+  initialize,
 };
