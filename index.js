@@ -1,8 +1,13 @@
 /* eslint-env node */
+
 'use strict';
-var fs = require('fs');
-var path = require('path');
-var map = require('broccoli-stew').map;
+const fs = require('fs');
+const path = require('path');
+const map = require('broccoli-stew').map;
+const {
+  splitVendorJs,
+  vendorStaticFilepath
+} = require('./lib/vendor-split');
 
 module.exports = {
   name: 'ember-cli-hot-loader',
@@ -11,9 +16,10 @@ module.exports = {
       return;
     }
 
-    var lsReloader = require('./lib/hot-reloader')(config.options, this.supportedTypes);
+    const lsReloader = require('./lib/hot-reloader')(config.options, this.supportedTypes);
     lsReloader.run();
   },
+
   included: function (app) {
     this._super.included(app);
 
@@ -21,21 +27,12 @@ module.exports = {
       return;
     }
 
-    var config = app.project.config('development');
-    var addonConfig = config[this.name] || { supportedTypes: ['components'] };
+    const config = app.project.config('development');
+    const addonConfig = config[this.name] || { supportedTypes: ['components'] };
     this.supportedTypes = addonConfig['supportedTypes'] || ['components'];
 
-    debugger;
-
-    var npmCompilerPath = path.join('ember-source', 'dist', 'ember-template-compiler.js');
-    var npmPath = path.relative(app.project.root, require.resolve(npmCompilerPath));
-
-    // Require template compiler as in CLI this is only used in build, we need it at runtime
-    if (fs.existsSync(npmPath)) {
-      app.import(npmPath);
-    } else {
-      throw new Error('Unable to locate ember-template-compiler.js. ember/ember-source not found in node_modules');
-    }
+    this._includeEmberTemplateCompiler(app);
+    this._configureVendor(app);
   },
 
   treeFor(name) {
@@ -50,5 +47,50 @@ module.exports = {
       return;
     }
     return this._super.treeFor.apply(this, arguments);
+  },
+
+  contentFor(type, config) {
+    if (type !== 'body') {
+      return;
+    }
+    return `<script src="${config.rootURL}${vendorStaticFilepath}"></script>`;
+  },
+
+  _includeEmberTemplateCompiler(app) {
+    const npmCompilerPath = path.join('ember-source', 'dist', 'ember-template-compiler.js');
+    const npmPath = path.relative(app.project.root, require.resolve(npmCompilerPath));
+
+    // Require template compiler as in CLI this is only used in build, we need it at runtime
+    if (fs.existsSync(npmPath)) {
+      app.import(npmPath);
+    } else {
+      throw new Error('Unable to locate ember-template-compiler.js. ember/ember-source not found in node_modules');
+    }
+  },
+
+  _configureVendor(app) {
+    const emberSource = app.project.findAddonByName('ember-source');
+
+    splitVendorJs(app, [
+      emberSource.paths.jquery,
+      emberSource.paths.debug,
+    ]);
+
+    const loaderJs = app.project.findAddonByName('loader.js');
+    if (loaderJs) {
+      splitVendorJs(app, [
+        {
+          file: 'vendor/loader/loader.js',
+          prepend: true
+        }
+      ]);
+    }
+
+    const emberCliBabel = app.project.findAddonByName('ember-cli-babel');
+    if (emberCliBabel) {
+      // babel plugin does not always include the polyfill, but splitVendorJs
+      // will check before adding it
+      splitVendorJs(app, ['vendor/babel-polyfill/polyfill.js']);
+    }
   }
 };
