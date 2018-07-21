@@ -1,8 +1,6 @@
 /* eslint-env node */
 
 'use strict';
-const fs = require('fs');
-const path = require('path');
 const map = require('broccoli-stew').map;
 const {
   splitVendorJs,
@@ -57,15 +55,11 @@ module.exports = {
   },
 
   _includeEmberTemplateCompiler(app) {
-    const npmCompilerPath = path.join('ember-source', 'dist', 'ember-template-compiler.js');
-    const npmPath = path.relative(app.project.root, require.resolve(npmCompilerPath));
+    const emberSource = app.project.findAddonByName('ember-source');
+    const npmPath = emberSource.absolutePaths.templateCompiler;
 
     // Require template compiler as in CLI this is only used in build, we need it at runtime
-    if (fs.existsSync(npmPath)) {
-      app.import(npmPath);
-    } else {
-      throw new Error('Unable to locate ember-template-compiler.js. ember/ember-source not found in node_modules');
-    }
+    app.import(npmPath);
   },
 
   _configureVendor(app) {
