@@ -10,7 +10,7 @@ const {
 module.exports = {
   name: 'ember-cli-hot-loader',
   serverMiddleware: function (config){
-    if (config.options.environment === 'production' || config.options.environment === 'test') {
+    if (!this.enabled) {
       return;
     }
 
@@ -22,19 +22,25 @@ module.exports = {
     this._super.included(app);
 
     if (app.env === 'production' || app.env === 'test') {
+      this.enabled = false;
       return;
     }
 
     const config = app.project.config('development');
     const addonConfig = config[this.name] || { supportedTypes: ['components'] };
+    this.enabled = addonConfig.enabled !== false;
     this.supportedTypes = addonConfig['supportedTypes'] || ['components'];
+
+    if (!this.enabled) {
+      return;
+    }
 
     this._includeEmberTemplateCompiler(app);
     this._configureVendor(app);
   },
 
   treeFor(name) {
-    if (this.app.env === 'production' || this.app.env === 'test') {
+    if (this.app.env === 'production' || this.app.env === 'test' || this.enabled === false) {
       if (name === 'app' || name === 'addon') {
         const noopResolverMixin = 'define(\'ember-cli-hot-loader/mixins/hot-reload-resolver\', [\'exports\'], function (exports) { \'use strict\'; Object.defineProperty(exports, "__esModule", { value: true }); exports.default = Ember.Mixin.create({}); });';
         const resolverMixin = 'ember-cli-hot-loader/mixins/hot-reload-resolver.js';
@@ -48,6 +54,9 @@ module.exports = {
   },
 
   contentFor(type, config) {
+    if (!this.enabled) {
+      return;
+    }
     if (type !== 'body') {
       return;
     }
