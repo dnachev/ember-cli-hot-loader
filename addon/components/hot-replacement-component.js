@@ -9,6 +9,17 @@ import clearCache from 'ember-cli-hot-loader/utils/clear-container-cache';
 import clearRequirejs from 'ember-cli-hot-loader/utils/clear-requirejs';
 import fullNameWithoutType from 'ember-cli-hot-loader/utils/names';
 
+// List of properties and their values, which
+// have special meaning for Ember. And they mostly
+// are not working with tagless component
+const SPECIAL_PROPS = {
+  classNameBindings: [],
+  classNames: [],
+  elementId: undefined,
+  attributeBindings: undefined,
+  tagName: ''
+};
+
 function regexEscape(s) {
   return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); // eslint-disable-line
 }
@@ -65,16 +76,34 @@ const HotReplacementComponent = Component.extend(HotComponentMixin, {
     const configuration = config['ember-cli-hot-loader'];
     const tagless = configuration && configuration['tagless'];
     const tagName = tagless ? '' : 'div';
+    this._saveSpecialProps();
     this.set('tagName', tagName);
     return this._super();
   },
+
+  _saveSpecialProps() {
+    Object.keys(SPECIAL_PROPS).forEach(prop => {
+      // store any value, which might have been set
+      this.set(`_${prop}`, this.get(prop));
+      // reset to the default value for this property
+      this.set(prop, SPECIAL_PROPS[prop]);
+    });
+  },
+
   parsedName: null,
   layout: computed(function () {
     let positionalParams = getPositionalParamsArray(this.constructor).join('');
-    let attrs = this.attrs || {};
+    let attrs = this.attrs || {}
     const attributesMap = Object.keys(attrs)
       .filter(key => positionalParams.indexOf(key) === -1)
-      .map(key =>`${key}=${key}`).join(' ');
+      .map(key => {
+        if (key in SPECIAL_PROPS) {
+          return `${key}=_${key}`;
+        } else {
+          return `${key}=${key}`;
+        }
+      })
+      .join(' ');
     return Ember.HTMLBars.compile(`
       {{#if hasBlock}}
         {{#if (hasBlock "inverse")}}
